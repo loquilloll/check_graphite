@@ -27,12 +27,15 @@
 #
 #############################################################################
 
-import urllib2
+import urllib.request
 import getopt
 import sys
 import getpass
 import os
 from decimal import Decimal
+import base64
+import requests
+from requests.auth import HTTPBasicAuth
 
 def main():
   #asigning defaults
@@ -40,8 +43,8 @@ def main():
   #parse options
   try:
     opts, args = getopt.getopt(sys.argv[1:], 'g:w:c:H:hm:t:T:v', ['help'])
-  except getopt.GetoptError, e:
-    print e
+  except getopt.GetoptError as e:
+    print(e)
     usage()
     sys.exit(3)
   for o, a in opts:
@@ -61,7 +64,7 @@ def main():
     cars['m'] = '0'
 
   if not 'g' in cars:
-    print "Missing argument '-g'"
+    print("Missing argument '-g'")
     usage()
     sys.exit(3)
 
@@ -102,14 +105,14 @@ def main():
     output = cars['g'] + " is " + str(data[0]) + ", time frame is " + cars['t']
 
   # Debug
-  if 'v' in cars: print "time frame: " + cars['t']
-  if 'v' in cars: print "output    : " + output
-  if 'v' in cars: print "perfdata  : " + perfdata
-  if 'v' in cars: print "result    : " + result
-  if 'v' in cars: print "\n\n"
+  if 'v' in cars: print("time frame: " + cars['t'])
+  if 'v' in cars: print("output    : " + output)
+  if 'v' in cars: print("perfdata  : " + perfdata)
+  if 'v' in cars: print("result    : " + result)
+  if 'v' in cars: print("\n\n")
 
   # Output
-  print output + perfdata
+  print(output + perfdata)
 
   if result == 'CRITICAL':
     sys.exit(2)
@@ -139,59 +142,58 @@ def getGraph(name, url, time):
   else:
     die('Unknown time format')
 
-  url = '%srender?target=%s&format=raw&from=-%s' %(url, name, time)
+
+  payload = {'target': f'{name}','format':'json','from':f'-{time}'}
+  url = f'{url}/render'
   try:
-    r = urllib2.urlopen(url)
-  except urllib2.HTTPError, e: #2.4 can't into as
-    if e.code != 401:
+    r = requests.get(url)   
+    r.raise_for_status()
+  except requests.exceptions.HTTPError as e:
+    if e.response.status_code != 401:
       die(e)
     try:
       death = None #without this the exception would cath the sys.exit() exception and die again printing the exit status
       user = os.environ.get('GRAPHITE_ACCESS_USER')
       passwd = os.environ.get('GRAPHITE_ACCESS_PASS')
-      if user or passwd == None:
+      if (user == None) or (passwd == None):
         death = ('Server requires authentication, set your env GRAPHITE_ACCESS_USER and GRAPHITE_ACCESS_PASS accordingly')
-      passMgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
-      passMgr.add_password(None, url, user, passwd)
-      authhandler = urllib2.HTTPBasicAuthHandler(passMgr)
-      opener = urllib2.build_opener(authhandler)
-      urllib2.install_opener(opener)
-      r = urllib2.urlopen(url)
-    except Exception, e:
+
+      r = requests.get(url,
+                        params=payload,
+                        auth=HTTPBasicAuth(user, passwd))
+
+      r.raise_for_status()
+    except requests.exceptions.HTTPError as e:
       if death == None:
         die(e)
       else:
         die(death)
-  except Exception, e:
+  except Exception as e:
     die(e)
 
-  text = r.read()
+  json = r.json()[0]
+  datapoints = json['datapoints']
   #Find latest entry
   #entry = (data,time,MaxMinAvgSum,status)
   entry = ()
-  if text == None:
+  if len(datapoints) == 0:
     die('Data returned by Graphite not valid')
-
-  text = text.split(',')
+  
   try:
-    ctime = int(text[1]) #Starting time
-    step = int(text[3][0])
-    t = text[3].split('|')
-    text[3] = t[-1] #first entry has a '|'
-    text[-1] = text[-1][:-1] #last entry has a newline
+    last_entry = datapoints[len(datapoints)-1]
+    ctime = last_entry[1] #Starting time
+    entry = (last_entry[0],last_entry[1]) #Keep the lastest entry
   except ValueError:
     die('Data returned by Graphite not valid')
 
-  #traverse, collect values and keep latest entry
+  #traverse, collect values
   vals = []
-  for word in text[3:]:
-    if word != 'None':
-      vals.append(Decimal(word))
-      entry = (Decimal(word), ctime)
+  for value in datapoints:
+    if value[0] is not None:
+      vals.append(value[0])
     elif vals:
       vals.append(vals[-1])
-    ctime += step
-
+  
   if entry != ():
     return (entry[0], entry[1], vals)
 
@@ -291,21 +293,20 @@ def handleOverThreshold(data, crit, warn, threshold):
 
 def getMaxMinAvgSum(data):
   #(max,min,avg,sum)
-  a = [Decimal(i) for i in data]
-  return (max(a), min(a), sum(a)/len(a), sum(a))
+  return (max(data), min(data), sum(data)/len(data), sum(data))
 
 
 def die(msg):
-  print msg
+  print(msg)
   sys.exit(3)
 
 def usage():
-  print 'Usage: \n'+sys.argv[0] + ' -g [Graph] -H [url] [-w [u][Wthreshold]] [-c [u][Cthreshold]] [-t [time frame]] [-h, --help]'
+  print('Usage: \n'+sys.argv[0] + ' -g [Graph] -H [url] [-w [u][Wthreshold]] [-c [u][Cthreshold]] [-t [time frame]] [-h, --help]')
 
 
 def showVerboseHelp():
-  print '  '+sys.argv[0]+' - Help\n'
-  print '''\
+  print('  '+sys.argv[0]+' - Help\n')
+  print('''\
   -g [graph name]      Name of the graph as given by Graphite
 
   -H [URL]             URL to the page Graphite is running on,
@@ -340,7 +341,7 @@ def showVerboseHelp():
   '''+sys.argv[0]+''' -g carbon.agents.cpuUsage -H http://example.com/ -w 85.4 -c u0 -t 3d
   Poll the graph carbon.agents.cpuUsage on example.com for the last three days,
   warning if it is over 85.4 and sending a critical if it is below 0.
-  '''
+  ''')
 
 if __name__ == '__main__':
   main()
