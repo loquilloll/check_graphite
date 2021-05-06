@@ -39,10 +39,10 @@ from requests.auth import HTTPBasicAuth
 
 def main():
   #asigning defaults
-  cars = {'w':None, 'c':None, 't':'24h', 'H':'http://localhost:80/'}
+  cars = {'w':None, 'c':None, 't':'24h', 'H':'http://localhost:80/','u':None,'p':None}
   #parse options
   try:
-    opts, args = getopt.getopt(sys.argv[1:], 'g:w:c:H:hm:t:T:v', ['help'])
+    opts, args = getopt.getopt(sys.argv[1:], 'g:w:c:H:hm:t:T:vu:p:', ['help'])
   except getopt.GetoptError as e:
     print(e)
     usage()
@@ -67,9 +67,11 @@ def main():
     print("Missing argument '-g'")
     usage()
     sys.exit(3)
+  
+
 
   # Get Graphite data
-  data = getGraph(cars['g'], cars['H'], cars['t'])
+  data = getGraph(cars['g'], cars['H'], cars['t'], cars['u'], cars['p'])
 
   # Handle thresholds
   perfdata = ""
@@ -123,7 +125,7 @@ def main():
 
 
 #get latest changed data, return (x,y,z)
-def getGraph(name, url, time):
+def getGraph(name, url, time, _user, _passwd):
   #graphite wants full names
   try:
     int(time[:-1])
@@ -153,11 +155,14 @@ def getGraph(name, url, time):
       die(e)
     try:
       death = None #without this the exception would cath the sys.exit() exception and die again printing the exit status
-      user = os.environ.get('GRAPHITE_ACCESS_USER')
-      passwd = os.environ.get('GRAPHITE_ACCESS_PASS')
+      user = _user
+      passwd = _passwd
       if (user == None) or (passwd == None):
-        death = ('Server requires authentication, set your env GRAPHITE_ACCESS_USER and GRAPHITE_ACCESS_PASS accordingly')
-
+        user = os.environ.get('GRAPHITE_ACCESS_USER')
+        passwd = os.environ.get('GRAPHITE_ACCESS_PASS')
+      elif (user == None) or (passwd == None):
+        death = ('Server requires authentication, provide -u and -p or, set your env GRAPHITE_ACCESS_USER and GRAPHITE_ACCESS_PASS accordingly')
+      print(user,passwd)
       r = requests.get(url,
                         params=payload,
                         auth=HTTPBasicAuth(user, passwd))
@@ -301,7 +306,7 @@ def die(msg):
   sys.exit(3)
 
 def usage():
-  print('Usage: \n'+sys.argv[0] + ' -g [Graph] -H [url] [-w [u][Wthreshold]] [-c [u][Cthreshold]] [-t [time frame]] [-h, --help]')
+  print('Usage: \n'+sys.argv[0] + ' -g [Graph] -H [url] [-w [u][Wthreshold]] [-c [u][Cthreshold]] [-t [time frame]] [-u [username]] [-p [password]] [-h, --help]')
 
 
 def showVerboseHelp():
@@ -332,6 +337,10 @@ def showVerboseHelp():
                           with all other options
 
   -v                   Verbose mode
+
+  -u                   Username. Alternative to GRAPHITE_ACCESS_USER
+
+  -p                   Password. Alternative to GRAPHITE_ACCESS_PASS
 
   -h                   Print usage
 
