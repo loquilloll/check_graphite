@@ -162,7 +162,6 @@ def getGraph(name, url, time, _user, _passwd):
         passwd = os.environ.get('GRAPHITE_ACCESS_PASS')
       elif (user == None) or (passwd == None):
         death = ('Server requires authentication, provide -u and -p or, set your env GRAPHITE_ACCESS_USER and GRAPHITE_ACCESS_PASS accordingly')
-      print(user,passwd)
       r = requests.get(url,
                         params=payload,
                         auth=HTTPBasicAuth(user, passwd))
