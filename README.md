@@ -12,6 +12,13 @@ An Icinga 2 plugin to check graphite metrics.
   * An example config is included.  
 * Done, now start icinga2.  
 
+# Authentication
+## Environment Variables:
+```
+GRAPHITE_ACCESS_USER
+GRAPHITE_ACCESS_PASS
+```
+
 # Usage
 
 ```

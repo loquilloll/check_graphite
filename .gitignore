@@ -2,3 +2,5 @@ check_graphite.py__old
 p24
 file
 TODO
+.mypy_cache
+.vscode

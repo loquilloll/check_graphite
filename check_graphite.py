@@ -206,7 +206,8 @@ def getGraph(name, url, time, _user, _passwd):
         die(e)
 
     json = r.json()[0]
-    datapoints = json["datapoints"]
+    # Filter out the None/Null datapoints
+    datapoints = [i for i in json["datapoints"] if i[0]]
     # Find latest entry
     # entry = (data,time,MaxMinAvgSum,status)
     entry = ()
